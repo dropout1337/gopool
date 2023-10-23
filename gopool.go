@@ -19,6 +19,7 @@ func New(maxThreads int) *ConcurrencyPool {
 
 func (cp *ConcurrencyPool) Wait() {
 	cp.available <- struct{}{}
+	cp.wg.Add(1)
 }
 
 func (cp *ConcurrencyPool) Done() {
