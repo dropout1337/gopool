@@ -11,19 +11,24 @@ type ConcurrencyPool struct {
 }
 
 func New(maxThreads int) *ConcurrencyPool {
+	available := make(chan struct{}, maxThreads)
+	for i := 0; i < maxThreads; i++ {
+		available <- struct{}{}
+	}
+
 	return &ConcurrencyPool{
 		maxThreads: maxThreads,
-		available:  make(chan struct{}, maxThreads),
+		available:  available,
 	}
 }
 
 func (cp *ConcurrencyPool) Wait() {
-	cp.available <- struct{}{}
+	<-cp.available
 	cp.wg.Add(1)
 }
 
 func (cp *ConcurrencyPool) Done() {
-	<-cp.available
+	cp.available <- struct{}{}
 	cp.wg.Done()
 }
 
@@ -33,7 +38,6 @@ func (cp *ConcurrencyPool) WaitUntilDone() {
 
 func (cp *ConcurrencyPool) Execute(fn func()) {
 	cp.Wait()
-	cp.wg.Add(1)
 
 	go func() {
 		defer cp.Done()
@@ -41,33 +45,22 @@ func (cp *ConcurrencyPool) Execute(fn func()) {
 	}()
 }
 
-func (cp *ConcurrencyPool) ResizePool(newSize int) {
-	if newSize > cp.maxThreads {
-		for i := cp.maxThreads; i < newSize; i++ {
+func (cp *ConcurrencyPool) ResizePool(newSize int) error {
+	cp.wg.Wait() // Ensure all goroutines have finished
+
+	currentSize := len(cp.available)
+	if newSize > currentSize {
+		for i := currentSize; i < newSize; i++ {
 			cp.available <- struct{}{}
 		}
-		cp.maxThreads = newSize
-	} else if newSize < cp.maxThreads {
-		diff := cp.maxThreads - newSize
-		for i := 0; i < diff; i++ {
-			<-cp.available
-		}
-		cp.maxThreads = newSize
+	} else if newSize < currentSize {
+		return fmt.Errorf("cannot resize pool to a smaller size than the number of active goroutines")
 	}
-}
 
-func (cp *ConcurrencyPool) SetMaxThreads(newMaxThreads int) {
-	cp.maxThreads = newMaxThreads
-}
-
-func (cp *ConcurrencyPool) GetCurrentThreadCount() int {
-	return len(cp.available)
+	cp.maxThreads = newSize
+	return nil
 }
 
 func (cp *ConcurrencyPool) IsAvailable() bool {
-	return cp.GetCurrentThreadCount() < cp.maxThreads
-}
-
-func (cp *ConcurrencyPool) GetMaxThreads() int {
-	return cp.maxThreads
+	return len(cp.available) > 0
 }
