@@ -31,16 +31,6 @@ func (cp *ConcurrencyPool) WaitUntilDone() {
 	cp.wg.Wait()
 }
 
-func (cp *ConcurrencyPool) Execute(fn func()) {
-	cp.Wait()
-	cp.wg.Add(1)
-
-	go func() {
-		defer cp.Done()
-		fn()
-	}()
-}
-
 func (cp *ConcurrencyPool) ResizePool(newSize int) {
 	if newSize > cp.maxThreads {
 		for i := cp.maxThreads; i < newSize; i++ {
