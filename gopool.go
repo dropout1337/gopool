@@ -1,4 +1,4 @@
-package gopool
+package main
 
 import (
 	"sync"
@@ -7,6 +7,7 @@ import (
 type ConcurrencyPool struct {
 	maxThreads int
 	wg         sync.WaitGroup
+	mu         sync.Mutex
 	available  chan struct{}
 }
 
@@ -18,6 +19,9 @@ func New(maxThreads int) *ConcurrencyPool {
 }
 
 func (cp *ConcurrencyPool) Wait() {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+
 	cp.available <- struct{}{}
 	cp.wg.Add(1)
 }
@@ -32,19 +36,13 @@ func (cp *ConcurrencyPool) WaitUntilDone() {
 }
 
 func (cp *ConcurrencyPool) ResizePool(newSize int) {
-	newChan := make(chan struct{}, newSize)
-	toPush := len(cp.available)
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
 
-	if toPush > newSize {
-		toPush = newSize
-	}
-
-	for i := 0; i < toPush; i++ {
-		newChan <- struct{}{}
-	}
+	cp.wg.Wait()
 
 	cp.maxThreads = newSize
-	cp.available = newChan
+	cp.available = make(chan struct{}, newSize)
 }
 
 func (cp *ConcurrencyPool) SetMaxThreads(newMaxThreads int) {
