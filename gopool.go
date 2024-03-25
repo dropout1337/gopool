@@ -32,18 +32,14 @@ func (cp *ConcurrencyPool) WaitUntilDone() {
 }
 
 func (cp *ConcurrencyPool) ResizePool(newSize int) {
-	if newSize > cp.maxThreads {
-		for i := cp.maxThreads; i < newSize; i++ {
-			cp.available <- struct{}{}
-		}
-		cp.maxThreads = newSize
-	} else if newSize < cp.maxThreads {
-		diff := cp.maxThreads - newSize
-		for i := 0; i < diff; i++ {
-			<-cp.available
-		}
-		cp.maxThreads = newSize
+	newChan := make(chan struct{}, newSize)
+
+	for i := 0; i < len(cp.available); i++ {
+		newChan <- struct{}{}
 	}
+
+	cp.maxThreads = newSize
+	cp.available = newChan
 }
 
 func (cp *ConcurrencyPool) SetMaxThreads(newMaxThreads int) {
