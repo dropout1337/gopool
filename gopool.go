@@ -33,8 +33,13 @@ func (cp *ConcurrencyPool) WaitUntilDone() {
 
 func (cp *ConcurrencyPool) ResizePool(newSize int) {
 	newChan := make(chan struct{}, newSize)
+	toPush := len(cp.available)
 
-	for i := 0; i < len(cp.available); i++ {
+	if toPush > newSize {
+		toPush = newSize
+	}
+
+	for i := 0; i < toPush; i++ {
 		newChan <- struct{}{}
 	}
 
